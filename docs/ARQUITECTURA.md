@@ -57,6 +57,7 @@ Solo se intercepta `POST /v1/messages`; el resto de rutas devuelve un error 502 
 | `tool_choice: any` / `tool` | `tool_choice: required` / `{type: function, function: {name}}` |
 | `max_tokens`, `temperature`, `top_p` | tal cual |
 | `model` | mapeado por nombre: contiene `haiku` → `haikuModel`, resto → `qwenModel` |
+| — | `cfg.extraOpenAI` (objeto) se mezcla en el request final: permite parámetros de backend como `chat_template_kwargs` (llama.cpp) sin tocar código |
 
 ### Response: OpenAI → Anthropic (no streaming)
 

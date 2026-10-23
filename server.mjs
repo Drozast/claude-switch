@@ -21,6 +21,7 @@ function loadConfig() {
     lmstudioBase: 'http://127.0.0.1:1234/v1',
     qwenModel: 'qwen3-coder-30b',
     haikuModel: 'qwen3-coder-30b',
+    extraOpenAI: {},
   };
   try {
     return { ...def, ...JSON.parse(readFileSync(CONFIG_PATH, 'utf8')) };
@@ -163,6 +164,7 @@ function anthropicToOpenAI(body) {
   if (body.max_tokens != null) out.max_tokens = body.max_tokens;
   if (body.temperature != null) out.temperature = body.temperature;
   if (body.top_p != null) out.top_p = body.top_p;
+  if (cfg.extraOpenAI && typeof cfg.extraOpenAI === 'object') Object.assign(out, cfg.extraOpenAI);
   if (Array.isArray(body.tools) && body.tools.length) {
     out.tools = body.tools.map(t => ({
       type: 'function',
