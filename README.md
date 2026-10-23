@@ -3,15 +3,26 @@
 Cambia entre **Claude (suscripción)** y **Qwen local (LM Studio)** en Claude Code con un clic, sin cerrar sesiones ni ventanas de VSCode.
 
 ```
-┌─────────────┐   ANTHROPIC_BASE_URL    ┌──────────────────────┐
-│ Claude Code │ ──────────────────────► │  claude-switch :8790 │
-│ (VSCode /   │                         │                      │
-│  terminal)  │                         │  modo claude ───────┼──► api.anthropic.com (tu suscripción, token OAuth intacto)
-└─────────────┘                         │  modo qwen   ───────┼──► backend OpenAI local (LM Studio, llama.cpp, vLLM…)
-                                        └──────────────────────┘
+┌──────────────┐  ANTHROPIC_BASE_URL   ┌─────────────────────────────────┐
+│ Ventana VSCode A │ ───────────────► │ manager :8790                   │
+│ (extensión inyecta su puerto)        │   ├ proxy :8791  (terminal/global)
+├──────────────┤                     │   ├ proxy :8792  (ventana A) ◄──┤ cada uno con su modo
+│ Ventana VSCode B │ ───────────────► │   └ proxy :8793  (ventana B)    │
+└──────────────┘                     └─────────────────────────────────┘
+        cada proxy:  modo claude ──► api.anthropic.com (suscripción, token OAuth intacto)
+                      modo qwen   ──► backend OpenAI local (LM Studio, llama.cpp, vLLM…)
 ```
 
-El truco: Claude Code apunta **siempre** al proxy local. El proxy decide por dónde manda cada petición, y ese cambio es en caliente — la próxima petición de cualquier sesión abierta usa el otro modelo. No hay que reiniciar nada.
+El truco: Claude Code apunta **siempre** a un proxy local. El proxy decide por dónde manda cada petición, y ese cambio es en caliente — la próxima petición de la sesión abierta usa el otro modelo. No hay que reiniciar nada.
+
+### Modo por-ventana
+
+Cada **ventana** de VSCode tiene su **propio proxy y su propio modo**: la extensión le inyecta a esa ventana `ANTHROPIC_BASE_URL` apuntando a su puerto (vía `claudeCode.environmentVariables` a nivel de ventana). Así puedes tener una ventana en Claude y otra en Qwen al mismo tiempo, y el clic en la barra de estado solo afecta a la ventana donde lo haces.
+
+- El CLI fuera de VSCode (terminal) usa el proxy **default** (`Terminal / global` en la UI).
+- La página web del manager (puerto 8790) lista todas las ventanas activas con su modo y botones para cambiarlo.
+- Los puertos se asignan de forma estable por ventana (sobreviven recargas); al cerrar la ventana se liberan.
+- Dos ventanas del *mismo* proyecto comparten puerto (mismo modo). Ventanas de proyectos distintos son independientes.
 
 ## Características
 
@@ -99,10 +110,10 @@ Te da:
 
 | Método | Acción |
 |---|---|
-| **Barra de estado VSCode** | Clic en `🟠 Claude · suscripción` ↔ `🔵 Qwen local` |
-| **Atajo** | `⌘⌥M` |
-| **Web** | http://127.0.0.1:8790 — botones grandes + estado de LM Studio |
-| **Terminal** | `./switch.sh toggle` · `./switch.sh qwen` · `./switch.sh claude` · `./switch.sh status` |
+| **Barra de estado VSCode** | Clic en `🟠 Claude · suscripción` ↔ `🔵 Qwen local` — **solo afecta a esa ventana** |
+| **Atajo** | `⌘⌥M` (en la ventana activa) |
+| **Web** | http://127.0.0.1:8790 — todas las ventanas + proxy de terminal, con botones por fila |
+| **Terminal** | `./switch.sh status` (lista todo) · `./switch.sh qwen [puerto]` · `./switch.sh claude [puerto]` · `./switch.sh toggle [puerto]` — sin puerto, actúa sobre el proxy de terminal |
 
 Para usar Qwen: arranca LM Studio con el modelo cargado, haz clic en 🔵 y listo. Para volver: clic en 🟠. Las conversaciones abiertas continúan exactamente donde estaban; solo la **próxima** petición cambia de modelo.
 
@@ -117,7 +128,7 @@ Para usar Qwen: arranca LM Studio con el modelo cargado, haz clic en 🔵 y list
 ./switch.sh qwen      # forzar modo qwen
 ```
 
-Archivos: `config.json` (configuración) · `state.json` (modo actual, generado) · `server.log` / `server.err.log` (logs).
+Archivos: `config.json` (configuración) · `states/` (modo por proxy, generado) · `manager-state.json` (asignación de puertos, generado) · `server.log` / `server.err.log` / `proxy-<puerto>.*.log` (logs).
 
 ## Documentación
 

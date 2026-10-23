@@ -25,6 +25,24 @@ Claude Code (N sesiones)
 └────────────────────────────────────────────┘
 ```
 
+## Manager: proxies por-ventana
+
+`manager.mjs` (puerto 8790) es el plano de control. Resuelve el problema de usar **varias ventanas de VSCode a la vez**: un solo proxy con un solo modo global haría que el clic en una ventana cambiara todas.
+
+```
+manager :8790
+├── proxy default :8791   (CLI de terminal; el manager reenvía /v1/* aquí)
+├── proxy :8792           (ventana VSCode A — owner estable)
+└── proxy :8793           (ventana VSCode B — owner estable)
+```
+
+- La extensión (que corre **por ventana**) llama a `POST /__ports/acquire {owner}` con un owner estable (`vscode-window:<carpeta>:<rand>` persistido en globalState). El manager spunea una instancia de `server.mjs --port N --state-file states/state-N.json` y devuelve el puerto.
+- La extensión escribe ese puerto en `claudeCode.environmentVariables` a **nivel de ventana** (`ConfigurationTarget.Window`): la extensión oficial lee esa config al spawnear cada CLI, así que todas las sesiones de esa ventana usan su puerto, y las de otras ventanas usan los suyos.
+- El modo se cambia por puerto (`POST http://127.0.0.1:<puerto>/__switch/toggle`), por lo que cada ventana es independiente. Los puertos son estables por owner (persistidos en `manager-state.json`), así las sesiones ya abiertas siguen apuntando a su proxy correcto.
+- `POST /__ports/release {owner}` al desactivar la extensión; el manager reapia proxies muertos cada 30 s y re-spawn el default cada 15 s.
+- Limitación conocida: dos ventanas del mismo proyecto comparten owner → mismo puerto/modo. Ventanas de proyectos distintos son independientes.
+- El CLI de terminal (fuera de VSCode) tiene `ANTHROPIC_BASE_URL=http://127.0.0.1:8790` en `~/.claude/settings.json`: el manager reenvía todo lo que no sea `/__*` al proxy default (:8791), que es el modo "Terminal / global".
+
 ## Modo Claude: passthrough transparente
 
 Para cada petición que no sea de control:

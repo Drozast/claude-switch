@@ -6,7 +6,7 @@
   "main": "server.mjs",
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check server.mjs && bash -n switch.sh && bash -n install-autostart.sh"
+    "check": "node --check server.mjs && node --check manager.mjs && bash -n switch.sh && bash -n install-autostart.sh"
   },
   "engines": {
     "node": ">=18"

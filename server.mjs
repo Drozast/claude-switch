@@ -12,7 +12,14 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = join(__dirname, 'config.json');
-const STATE_PATH = join(__dirname, 'state.json');
+
+// args opcionales (el manager lanza instancias por ventana: --port N --state-file path)
+function argVal(flag) {
+  const i = process.argv.indexOf(flag);
+  return i > 0 ? process.argv[i + 1] : undefined;
+}
+const PORT_ARG = parseInt(argVal('--port') || '', 10) || 0;
+const STATE_PATH = argVal('--state-file') || join(__dirname, 'state.json');
 
 function loadConfig() {
   const def = {
@@ -24,7 +31,9 @@ function loadConfig() {
     extraOpenAI: {},
   };
   try {
-    return { ...def, ...JSON.parse(readFileSync(CONFIG_PATH, 'utf8')) };
+    const c = { ...def, ...JSON.parse(readFileSync(CONFIG_PATH, 'utf8')) };
+    if (PORT_ARG) c.port = PORT_ARG;
+    return c;
   } catch {
     return def;
   }

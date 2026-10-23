@@ -13,7 +13,7 @@ cat > "$PLIST" <<EOF
   <key>ProgramArguments</key>
   <array>
     <string>$NODE</string>
-    <string>$DIR/server.mjs</string>
+    <string>$DIR/manager.mjs</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -26,5 +26,5 @@ EOF
 
 launchctl unload "$PLIST" 2>/dev/null
 launchctl load "$PLIST"
-echo "autostart instalado: $PLIST"
+echo "autostart instalado: $PLIST (manager)"
 "$DIR/switch.sh" status
