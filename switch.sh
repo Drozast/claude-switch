@@ -35,7 +35,7 @@ case "${1:-status}" in
 import json,sys
 for w in json.load(sys.stdin):
     icon = {"claude":"🟠","qwen":"🔵"}.get(w.get("mode") or "", "⚪")
-    print(f"{icon} {w[\"label\"]:<28} puerto {w[\"port\"]}  modo: {w.get(\"mode\") or \"?\"}  {\"ok\" if w[\"alive\"] else \"CAÍDO\"}")'
+    print(icon, w["label"], "| puerto", w["port"], "| modo:", w.get("mode") or "?", "|", "ok" if w["alive"] else "CAIDO")'
     else
       echo "servidor detenido"
     fi
