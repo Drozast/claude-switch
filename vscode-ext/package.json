@@ -1,0 +1,47 @@
+{
+  "name": "claude-model-switch",
+  "displayName": "Claude Model Switch",
+  "description": "Cambia entre Claude (suscripción) y Qwen local con un clic en la barra de estado",
+  "version": "0.0.1",
+  "publisher": "drozast",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudeSwitch.toggle",
+        "title": "Claude Switch: Cambiar modelo (toggle)"
+      },
+      {
+        "command": "claudeSwitch.useClaude",
+        "title": "Claude Switch: Usar Claude (suscripción)"
+      },
+      {
+        "command": "claudeSwitch.useQwen",
+        "title": "Claude Switch: Usar Qwen (local)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "claudeSwitch.toggle",
+        "key": "cmd+alt+m",
+        "mac": "cmd+alt+m"
+      }
+    ]
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

@@ -1,0 +1,17 @@
+# estado local (modo actual)
+state.json
+
+# logs
+*.log
+
+# node
+node_modules/
+package-lock.json
+
+# extension vscode: artefactos de empaquetado
+vscode-ext/*.vsix
+vscode-ext/node_modules/
+vscode-ext/package-lock.json
+
+# macOS
+.DS_Store

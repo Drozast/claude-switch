@@ -1,0 +1,24 @@
+{
+  "name": "claude-switch",
+  "version": "0.1.0",
+  "description": "Cambia entre Claude (suscripción) y Qwen local (LM Studio) en Claude Code con un clic, sin cerrar sesiones",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node --check server.mjs && bash -n switch.sh && bash -n install-autostart.sh"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "proxy",
+    "litellm-alternative",
+    "qwen",
+    "lm-studio",
+    "anthropic",
+    "model-switcher"
+  ]
+}
