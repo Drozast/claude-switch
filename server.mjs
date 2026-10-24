@@ -203,7 +203,8 @@ function trimHistory(messages, budget) {
   const rest = messages.filter(m => m.role !== 'system');
   let dropped = 0;
   // quita desde el principio; luego sigue hasta que empiece en un mensaje 'user' (no deja tool/assistant huérfanos)
-  while (rest.length > 1 && (total > budget || rest[0].role !== 'user')) {
+  const target = Math.floor(budget * 0.7);
+  while (rest.length > 1 && (total > target || rest[0].role !== 'user')) {
     total -= estTokens(rest.shift());
     dropped++;
   }
@@ -217,7 +218,10 @@ function anthropicToOpenAI(body) {
     const text = typeof body.system === 'string'
       ? body.system
       : body.system.map(b => (typeof b === 'string' ? b : b.text || '')).join('\n');
-    if (text.trim()) messages.push({ role: 'system', content: text });
+    // Claude Code abre el system con "x-anthropic-billing-header: …huella…" que cambia por conversación y rompe el prefijo
+    // común: llama.cpp no puede reutilizar la caché entre ventanas/llamadas auxiliares. A Qwen no le sirve: se quita.
+    const clean = text.split('\n').filter(l => !l.startsWith('x-anthropic-billing-header:')).join('\n');
+    if (clean.trim()) messages.push({ role: 'system', content: clean });
   }
   for (const m of body.messages || []) {
     if (typeof m.content === 'string') {
@@ -225,6 +229,11 @@ function anthropicToOpenAI(body) {
       continue;
     }
     const blocks = Array.isArray(m.content) ? m.content : [];
+    if (m.role === 'system') { // mensaje system con bloques (salida de hooks, recordatorios): texto -> system; mergeSystem lo sube al inicio
+      const t = blocks.filter(b => b.type === 'text').map(b => b.text).join('\n');
+      if (t.trim()) messages.push({ role: 'system', content: t });
+      continue;
+    }
     if (m.role === 'user') {
       const userParts = [];
       for (const b of blocks) {
@@ -263,6 +272,11 @@ function anthropicToOpenAI(body) {
   if (body.temperature != null) out.temperature = body.temperature;
   if (body.top_p != null) out.top_p = body.top_p;
   if (cfg.extraOpenAI && typeof cfg.extraOpenAI === 'object') Object.assign(out, cfg.extraOpenAI);
+  // llamadas utilitarias de Claude Code (haiku o sin herramientas: títulos, resúmenes): sin razonamiento, son cortas
+  if (/haiku/i.test(body.model || '') || !(Array.isArray(body.tools) && body.tools.length)) {
+    delete out.thinking_budget_tokens;
+    out.chat_template_kwargs = { ...(out.chat_template_kwargs || {}), enable_thinking: false };
+  }
   if (Array.isArray(body.tools) && body.tools.length) {
     out.tools = body.tools.map(t => ({
       type: 'function',
@@ -315,7 +329,7 @@ async function streamOpenAIToAnthropic(upstream, res, requestedModel) {
   let finishReason = 'end_turn';
   let inputTokens = 0, outputTokens = 0;
   const blocks = new Map(); // index -> {type, id, name, json}
-  let textBlockOpen = false;
+  let textBlockOpen = false, hadText = false;
 
   const ensureStart = () => {
     if (started) return;
@@ -333,7 +347,7 @@ async function streamOpenAIToAnthropic(upstream, res, requestedModel) {
   const openTextBlock = () => {
     ensureStart();
     if (textBlockOpen) return;
-    textBlockOpen = true;
+    textBlockOpen = true; hadText = true;
     sse(res, 'content_block_start', { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } });
   };
 
@@ -406,6 +420,7 @@ async function streamOpenAIToAnthropic(upstream, res, requestedModel) {
     delta: { stop_reason: finishReason, stop_sequence: null },
     usage: { input_tokens: inputTokens, output_tokens: outputTokens },
   });
+  log(`qwen -> stop=${finishReason} out_tokens=${outputTokens} herramientas=${blocks.size} texto=${hadText}`);
   sse(res, 'message_stop', { type: 'message_stop' });
   res.end();
 }
@@ -418,7 +433,14 @@ async function handleQwen(req, res) {
     res.writeHead(400, { 'content-type': 'application/json' });
     return res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'body no es JSON' } }));
   }
+  const t0 = Date.now();
   const openaiReq = anthropicToOpenAI(body);
+  log(`qwen <- modelo=${body.model} msgs=${openaiReq.messages.length} tools=${openaiReq.tools?.length || 0} ~tok=${openaiReq.messages.reduce((n, m) => n + estTokens(m), 0)} stream=${openaiReq.stream}`);
+  if (cfg.debugRequests && !openaiReq.tools?.length) { // llamada auxiliar (solo en depuración: el log mostraría trozos de tu conversación): deja una pista de qué es (solo 120 caracteres del system y del último mensaje)
+    const sys = String(openaiReq.messages[0]?.content || '').replace(/\s+/g, ' ').slice(0, 120);
+    const last = String(openaiReq.messages.at(-1)?.content?.[0]?.text ?? openaiReq.messages.at(-1)?.content ?? '').replace(/\s+/g, ' ').slice(0, 120);
+    log(`qwen aux: system="${sys}" ultimo="${last}" max_tokens=${body.max_tokens}`);
+  }
   const url = `${cfg.lmstudioBase}/chat/completions`;
 
   let upstream;
@@ -438,6 +460,7 @@ async function handleQwen(req, res) {
     }));
   }
 
+  const ttfb = Date.now() - t0;
   const contentType = upstream.headers.get('content-type') || '';
   if (!upstream.ok) {
     const text = await upstream.text();
@@ -454,6 +477,7 @@ async function handleQwen(req, res) {
       connection: 'keep-alive',
     });
     await streamOpenAIToAnthropic(upstream, res, body.model);
+    log(`qwen tiempos: primer byte ${ttfb} ms, total ${Date.now() - t0} ms`);
   } else {
     const data = await upstream.json();
     res.writeHead(200, { 'content-type': 'application/json' });
