@@ -17,7 +17,7 @@ El truco: Claude Code apunta **siempre** a un proxy local. El proxy decide por d
 
 ### Modo por-ventana
 
-Cada **ventana** de VSCode tiene su **propio proxy y su propio modo**: la extensión le inyecta a esa ventana `ANTHROPIC_BASE_URL` apuntando a su puerto (vía `claudeCode.environmentVariables` a nivel de ventana). Así puedes tener una ventana en Claude y otra en Qwen al mismo tiempo, y el clic en la barra de estado solo afecta a la ventana donde lo haces.
+Cada **ventana** de VSCode tiene su **propio proxy y su propio modo**: la extensión escribe `ANTHROPIC_BASE_URL` apuntando a su puerto en `.claude/settings.local.json` del proyecto (Claude Code lo lee por proyecto y pisa el valor global). Así puedes tener una ventana en Claude y otra en Qwen al mismo tiempo, y el clic en la barra de estado solo afecta a la ventana donde lo haces.
 
 - El CLI fuera de VSCode (terminal) usa el proxy **default** (`Terminal / global` en la UI).
 - La página web del manager (puerto 8790) lista todas las ventanas activas con su modo y botones para cambiarlo.
@@ -32,6 +32,49 @@ Cada **ventana** de VSCode tiene su **propio proxy y su propio modo**: la extens
 - 🔄 **Cambio en caliente**: sin cerrar sesiones, terminales ni ventanas. El modo persiste entre reinicios.
 - 🩺 **Salud**: la UI y la barra de estado indican si LM Studio responde antes de que lo necesites.
 - 📦 **Cero dependencias**: Node ≥ 18, un solo archivo de servidor.
+
+## Escenarios de uso
+
+El proxy solo necesita dos cosas: tu sesión de Claude Code y un backend OpenAI-compatible. Según lo que tengas:
+
+| Escenario | Modo `claude` | Modo `qwen` (backend) | Config clave |
+|---|---|---|---|
+| **A. Suscripción + modelo local en tu Mac** | Suscripción Pro/Max (OAuth, passthrough) | LM Studio en `127.0.0.1:1234` | defaults |
+| **B. Suscripción + servidor propio (LAN/Tailscale)** | Suscripción | `llama-server` (llama.cpp) en otra máquina, p. ej. varias sesiones a la vez | `lmstudioBase: "http://<ip>:8090/v1"`, `maxPromptTokens` según el contexto por sesión |
+| **C. Suscripción + otro proveedor con API key** | Suscripción | OpenRouter, DeepSeek, OpenAI… | `lmstudioBase`, `qwenModel`/`haikuModel` = ids del proveedor, `backendApiKey` |
+| **D. API key de Anthropic en vez de suscripción** | `ANTHROPIC_API_KEY` en Claude Code: el proxy la reenvía tal cual | cualquiera de A–C | Claude Code manda su credencial; el proxy no la toca |
+
+Ejemplo C (OpenRouter):
+
+```json
+{
+  "lmstudioBase": "https://openrouter.ai/api/v1",
+  "qwenModel": "qwen/qwen3-coder",
+  "haikuModel": "qwen/qwen3-coder",
+  "extraOpenAI": {},
+  "backendApiKey": ""
+}
+```
+
+```bash
+export CLAUDE_SWITCH_BACKEND_KEY=sk-or-...   # antes de ./switch.sh start (o en el LaunchAgent)
+```
+
+> `extraOpenAI` es específico del backend: `thinking_budget_tokens` y `chat_template_kwargs` son de llama.cpp; con proveedores en la nube déjalo vacío salvo que su documentación diga otra cosa.
+
+### Qué pasa con el contexto al cambiar de modelo
+
+- **La conversación no se pierde**: Claude Code guarda el historial y lo reenvía completo en cada petición; el proxy lo traduce y el otro modelo lo recibe entero.
+- **Se pierde la caché**: el modelo al que cambias no tiene el historial cacheado y reprocesa todo el prompt. Con modelos locales y sesiones largas la primera respuesta puede tardar minutos. Haz `/compact` antes de cambiar si la sesión es larga.
+- **Ventanas distintas**: Claude Code compacta pensando en ~200k tokens, pero tu modelo local puede tener menos. Si el historial no cabe, el proxy descarta los mensajes más viejos (ver `maxPromptTokens`) en vez de dejar que el backend rechace la petición.
+- **Los bloques de "thinking"** de Claude no se envían al backend OpenAI; el estilo y las respuestas cambian a mitad de conversación porque es otro modelo.
+- Si se agota tu cuota de suscripción, cambia a `qwen` (botón de la barra de estado o `./switch.sh qwen`): la siguiente petición ya sale por el backend.
+
+### Servir un modelo con llama.cpp para varias sesiones
+
+`--ctx-size` es el contexto **total**, y se reparte entre los slots: con `--parallel N` cada sesión tiene `ctx-size / N`. Ejemplo medido (Qwen 27B cuantizado, 24 GB de VRAM repartidos en 2 GPUs): `--ctx-size 212992 --parallel 2` → 2 sesiones de 106.496 tokens; una tercera petición espera en cola. Con KV cuantizado (`--cache-type-k q4_0 --cache-type-v q4_0 --flash-attn on`) cabe el doble de contexto. Pon en `maxPromptTokens` un valor por debajo de tu contexto por sesión.
+
+Razonamiento (modelos thinking): según un test agéntico propio de 5 tareas pequeñas × 4 niveles, un tope medio (`--reasoning-budget 2000` o `"extraOpenAI": {"thinking_budget_tokens": 2000}`) mantuvo la calidad con tiempos razonables; apagarlo (`chat_template_kwargs.enable_thinking=false`) fue ~40 % más rápido para ediciones mecánicas. Mide con tus propias tareas.
 
 ## Requisitos
 
@@ -50,7 +93,11 @@ cd claude-switch
 
 ### 2. Configurar (si tu setup difiere del default)
 
-Edita `config.json`:
+Copia la plantilla (`config.json` es local y está en `.gitignore`) y edítala:
+
+```bash
+cp config.example.json config.json
+```
 
 ```json
 {
@@ -69,7 +116,11 @@ Edita `config.json`:
 | `lmstudioBase` | Base OpenAI-compatible del backend local (incluye `/v1`). Sirve para **cualquier** backend: LM Studio, llama.cpp/llama-server en tu LAN o Tailscale, vLLM, etc. |
 | `qwenModel` | Modelo para peticiones sonnet/opus (el id que aparece en `GET /v1/models`) |
 | `haikuModel` | Modelo para peticiones haiku (tareas en background) |
+| `backendApiKey` | Clave del backend si es un proveedor con API key (OpenRouter, DeepSeek, OpenAI…). Se envía como `Authorization: Bearer`. También vale la variable de entorno `CLAUDE_SWITCH_BACKEND_KEY` (mejor: no queda en disco). Vacía para backends locales |
+| `maxPromptTokens` | Tope estimado (chars/3) del prompt en modo qwen. Si el historial lo supera se descartan los mensajes más antiguos y se avisa en el log. Pon (contexto por sesión de tu backend − tokens de salida); default 85000 |
+| `debugRequests` | `true` guarda la última petición en `debug-last-request.json` para depurar. **Contiene tu conversación**: está en `.gitignore`, no la compartas |
 | `extraOpenAI` | Objeto que se mezcla en cada request OpenAI. Ej.: `{"chat_template_kwargs":{"enable_thinking":false}}` para modelos thinking de llama.cpp, o un `temperature` fijo |
+| `maxPromptTokens` | Tope estimado (chars/3) del prompt en modo qwen; si el historial lo supera se descartan los mensajes más viejos y se avisa en el log. Default 85000 (sesión de 106k menos la salida) |
 
 ### 3. Apuntar Claude Code al proxy
 
@@ -104,7 +155,10 @@ code --install-extension claude-model-switch-*.vsix
 Te da:
 - Indicador en la barra de estado (abajo a la izquierda): clic para alternar
 - Atajo `⌘⌥M` (toggle)
-- Comandos en la paleta: *Claude Switch: Cambiar modelo / Usar Claude / Usar Qwen*
+- Icono `$(window)` junto al indicador: abre el panel del manager (todas las ventanas) dentro de VSCode, sin navegador
+- Comandos en la paleta: *Claude Switch: Cambiar modelo / Usar Claude / Usar Qwen / Abrir panel de ventanas*
+
+Tras instalarla, recarga la ventana y abre una sesión nueva de Claude Code (las ya abiertas conservan su puerto anterior).
 
 ## Uso
 
@@ -139,7 +193,8 @@ Archivos: `config.json` (configuración) · `states/` (modo por proxy, generado)
 - **Límites de sesión**: en modo Claude sigues consumiendo tu suscripción (incluidos los límites de 5h/semana). El modo Qwen es local e ilimitado (según tu máquina).
 - **El proxy debe estar corriendo**: si no, Claude Code no conecta. Con el autostart no debería pasar; si pasa, `./switch.sh start`.
 - **Backend local**: el modo Qwen mapea *todos* los nombres de modelo de Claude a `qwenModel`/`haikuModel`. El backend puede ser LM Studio, llama.cpp (`llama-server`) en otra máquina de tu red (LAN/Tailscale), vLLM… cualquier API OpenAI-compatible que soporte streaming y function calling.
-- **Modelos thinking** (llama.cpp): agrega `"extraOpenAI": {"chat_template_kwargs": {"enable_thinking": false}}` o las respuestas consumen los tokens en reasoning y llegan vacías.
+- **Modelos thinking** (llama.cpp): limita el razonamiento con `"extraOpenAI": {"thinking_budget_tokens": 2000}` o apágalo con `{"chat_template_kwargs": {"enable_thinking": false}}`; sin tope, las respuestas pueden consumir los tokens en reasoning y llegar vacías.
+- **Privacidad**: el proxy no guarda tus peticiones (solo con `debugRequests: true`) ni tu token OAuth; `config.json`, `states/` y `manager-state.json` son locales y no se versionan.
 
 ## Licencia
 

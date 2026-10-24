@@ -37,7 +37,7 @@ manager :8790
 ```
 
 - La extensión (que corre **por ventana**) llama a `POST /__ports/acquire {owner}` con un owner estable (`vscode-window:<carpeta>:<rand>` persistido en globalState). El manager spunea una instancia de `server.mjs --port N --state-file states/state-N.json` y devuelve el puerto.
-- La extensión escribe ese puerto en `claudeCode.environmentVariables` a **nivel de ventana** (`ConfigurationTarget.Window`): la extensión oficial lee esa config al spawnear cada CLI, así que todas las sesiones de esa ventana usan su puerto, y las de otras ventanas usan los suyos.
+- La extensión escribe `ANTHROPIC_BASE_URL=http://127.0.0.1:<puerto>` en `<proyecto>/.claude/settings.local.json` (clave `env`): Claude Code lee ese archivo por proyecto y pisa el `env` global, así que todas las sesiones de esa ventana usan su puerto. (No se usa `claudeCode.environmentVariables`: esa config es de scope `machine` y VSCode rechaza escribirla a nivel de ventana.) Las sesiones ya abiertas conservan el puerto con el que arrancaron; abre una sesión nueva tras la primera instalación. Una ventana sin carpeta abierta usa el proxy global.
 - El modo se cambia por puerto (`POST http://127.0.0.1:<puerto>/__switch/toggle`), por lo que cada ventana es independiente. Los puertos son estables por owner (persistidos en `manager-state.json`), así las sesiones ya abiertas siguen apuntando a su proxy correcto.
 - `POST /__ports/release {owner}` al desactivar la extensión; el manager reapia proxies muertos cada 30 s y re-spawn el default cada 15 s.
 - Limitación conocida: dos ventanas del mismo proyecto comparten owner → mismo puerto/modo. Ventanas de proyectos distintos son independientes.
@@ -102,6 +102,12 @@ chunk con tool_calls[i].arguments (parcial) → content_block_delta(i+1, input_j
 
 `finish_reason: tool_calls` en cualquier chunk fuerza `stop_reason: tool_use` en el `message_delta` final. Los tokens de `usage` (si el backend los envía) se propagan al `message_delta`.
 
+### Normalizaciones para backends llama.cpp
+
+- **Mensajes `system` sueltos**: Claude Code puede enviar mensajes con rol `system` dentro de `messages`. Las plantillas Jinja de Qwen exigen un único `system` al inicio (`System message must be at the beginning`), así que el proxy los fusiona en el primero.
+- **Esquemas de herramientas**: se simplifican (`$ref`, `anyOf`, `allOf`, `prefixItems`…) y se descartan los `pattern` con lookaround, bytes nulos o escapes `\xNN`, que rompen la gramática de llama.cpp (`failed to parse grammar`).
+- **Recorte de historial** (`maxPromptTokens`, default 85000, estimado a chars/3): si el prompt no cabe en la ventana de Qwen, se descartan los mensajes más antiguos (empezando siempre en un mensaje `user`, sin dejar `tool_result` huérfanos) y se deja una nota en el prompt y en el log. Ajústalo a (contexto por sesión − tokens de salida).
+
 ### Límites conocidos de la conversión
 
 - `cache_control` (prompt caching) no se traduce: LM Studio no lo soporta.
@@ -135,11 +141,12 @@ El health de LM Studio (`lmstudio`) es un `GET {lmstudioBase}/models` con timeou
 
 ## Extensión de VSCode
 
-`vscode-ext/` es una extensión mínima (~100 líneas):
+`vscode-ext/` es una extensión mínima (~150 líneas):
 
 - Crea un item en la barra de estado (izquierda) con el modo actual.
 - Pulea `/__switch/status` cada 5 s y actualiza el texto (`🟠 Claude · suscripción` / `🔵 Qwen local` / `⚪ sin proxy`).
 - Clic en el item → `POST /__switch/toggle`. Comandos adicionales para forzar un modo concreto. Atajo por defecto: `⌘⌥M`.
+- Icono `$(window)` junto al indicador: abre la página del manager (`http://127.0.0.1:8790/`) dentro de VSCode con el Simple Browser integrado (comando *Claude Switch: Abrir panel de ventanas*).
 - Si el proxy no responde, el item muestra `⚪ claude-switch: sin proxy` y los comandos avisan con un error.
 
 ## Troubleshooting
@@ -151,6 +158,8 @@ El health de LM Studio (`lmstudio`) es un `GET {lmstudioBase}/models` con timeou
 | 401 `OAuth access token is invalid` en modo claude | Token de la suscripción expirado → `claude /login`. El passthrough funciona (el error viene de Anthropic, no del proxy). |
 | "You've hit your session limit" | Límite de tu plan Anthropic; se resetea a la hora indicada. No es un bug del proxy. |
 | Modo qwen: "LM Studio no responde" | Arranca LM Studio con el modelo cargado y verifica que el puerto sea 1234. El indicador de la UI/barra de estado lo muestra en vivo. |
+| Qwen responde `400 … System message must be at the beginning` o `failed to parse grammar` | Actualiza a la última versión (normalizaciones de arriba). Si persiste, activa `"debugRequests": true` en `config.json`: el proxy guarda la última petición en `debug-last-request.json` (contiene tu conversación, no lo subas a ningún sitio). |
+| Al cambiar a Qwen la primera respuesta tarda mucho | Qwen no tiene caché de ese historial: reprocesa todo el prompt (con ~600 tok/s, 100k tokens ≈ 3 min). Haz `/compact` antes de cambiar si la sesión es larga. |
 | Cambié `config.json` y no hace efecto | El config se lee al arrancar → `./switch.sh stop && ./switch.sh start`. |
 | La barra de estado de VSCode no aparece | Recarga la ventana una vez (`Developer: Reload Window`) para activar la extensión recién instalada. |
 | Quiero otro modelo local (p. ej. para haiku) | Cambia `haikuModel` en `config.json`, o pon un LiteLLM detrás y apunta `lmstudioBase` a él (el proxy habla OpenAI, así que cualquier backend OpenAI-compatible sirve). |

@@ -1,0 +1,10 @@
+{
+  "port": 8790,
+  "anthropicTarget": "https://api.anthropic.com",
+  "lmstudioBase": "http://127.0.0.1:1234/v1",
+  "qwenModel": "qwen3-coder-30b",
+  "haikuModel": "qwen3-coder-30b",
+  "extraOpenAI": {},
+  "maxPromptTokens": 85000,
+  "backendApiKey": ""
+}

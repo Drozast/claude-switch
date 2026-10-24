@@ -40,6 +40,9 @@ function loadConfig() {
 }
 
 const cfg = loadConfig();
+// clave del backend (OpenRouter, DeepSeek, OpenAI…): config.json o variable de entorno; vacía = sin Authorization
+const BACKEND_KEY = process.env.CLAUDE_SWITCH_BACKEND_KEY || cfg.backendApiKey || '';
+const backendAuth = () => (BACKEND_KEY ? { authorization: `Bearer ${BACKEND_KEY}` } : {});
 
 // ─── estado (modo) ───────────────────────────────────────────────
 let state = { mode: 'claude' };
@@ -122,6 +125,92 @@ function pickModel(name) {
   return cfg.qwenModel;
 }
 
+// ─── simplificación de schemas JSON para grammars de llama.cpp ──────────
+// Claude Code manda 300+ tools con $ref/$defs, anyOf, oneOf, allOf, not,
+// if/then, prefixItems, patterns con null bytes y maxLength de 256K — el
+// compilador de grammars de llama.cpp no los soporta y devuelve 400 "failed
+// to parse grammar". Se resuelven refs, se aplanan combinadores y se limitan
+// longitudes (verificado contra llama.cpp real).
+function simplifySchema(node, root, depth = 0) {
+  if (depth > 12 || node == null) return {};
+  if (Array.isArray(node)) return node.map(n => simplifySchema(n, root, depth + 1));
+  if (typeof node !== 'object') return node;
+  const out = {};
+  for (const [k, v] of Object.entries(node)) {
+    if (k === '$defs' || k === '$definitions') continue; // se resuelven vía $ref
+    if (k === '$ref' && typeof v === 'string') {
+      // el target resuelve los keys; los siblings de $ref (p. ej. description) se conservan
+      Object.assign(out, simplifySchema(resolveRef(v, root), root, depth + 1));
+      continue;
+    }
+    if (k === 'anyOf' || k === 'oneOf') {
+      const branches = (v || []).map(b => simplifySchema(b, root, depth + 1));
+      const nonNull = branches.filter(b => !(b && b.type === 'null'));
+      const pick = (nonNull.length ? nonNull : branches)[0];
+      if (!pick) continue;
+      if (pick.type === 'object' || pick.properties) Object.assign(out, pick);
+      else if (!('type' in pick)) { out.type = 'string'; if (pick.description) out.description = pick.description; }
+      else out.type = pick.type; // primitivo: se conserva tal cual
+      continue;
+    }
+    if (k === 'allOf') {
+      for (const b of v || []) Object.assign(out, simplifySchema(b, root, depth + 1));
+      continue;
+    }
+    if (k === 'not' || k === 'if' || k === 'then' || k === 'else' || k === 'patternProperties' || k === 'unevaluatedProperties') continue;
+    // prefixItems (tuplas, JSON Schema 2020-12) -> items permisivo
+    if (k === 'prefixItems') { out.items = {}; continue; }
+    // patterns con null bytes, escapes \xNN o lookahead/lookbehind rompen la grammar de
+    // llama.cpp (verificado contra llama.cpp real); el resto de regex sí compila
+    if (k === 'pattern' && typeof v === 'string' && (/\\x00|\\u0000|(^|[^\\])\\0(?![0-9])/i.test(v) || /\(\?/.test(v) || /\\x[0-9a-f]{2}/i.test(v))) continue;
+    // maxLength/minLength gigantes -> contadores enormes en la grammar
+    if (k === 'maxLength' || k === 'minLength') { if (typeof v === 'number' && v > 512) out[k] = 512; else out[k] = v; continue; }
+    if (k === 'maxItems' || k === 'minItems') { if (typeof v === 'number' && v > 128) out[k] = 128; else out[k] = v; continue; }
+    if (typeof v === 'object' && v !== null) out[k] = simplifySchema(v, root, depth + 1);
+    else out[k] = v;
+  }
+  return out;
+}
+
+function resolveRef(ref, root) {
+  if (typeof ref !== 'string' || !ref.startsWith('#/')) return {};
+  let node = root;
+  for (const part of ref.slice(2).split('/')) {
+    if (node == null || typeof node !== 'object') return {};
+    node = node[part.replace(/~1/g, '/').replace(/~0/g, '~')];
+  }
+  return node && typeof node === 'object' ? node : {};
+}
+
+// Recorta el historial más viejo para que el prompt quepa en la sesión de Qwen.
+// ponytail: estimación chars/3 (sin tokenizador); si falla por exceso, bajar maxPromptTokens en config.json.
+function estTokens(m) {
+  const c = typeof m.content === 'string' ? m.content : JSON.stringify((m.content || []).map(p => p.type === 'image_url' ? 'x'.repeat(3000) : p));
+  return Math.ceil(((c || '').length + JSON.stringify(m.tool_calls || '').length) / 3);
+}
+// La plantilla de Qwen exige UN solo mensaje system, al principio: junta los demás en él.
+function mergeSystem(messages) {
+  const sys = messages.filter(m => m.role === 'system');
+  if (!sys.length || (sys.length === 1 && messages[0].role === 'system')) return messages;
+  const text = sys.map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).join('\n\n');
+  return [{ role: 'system', content: text }, ...messages.filter(m => m.role !== 'system')];
+}
+function trimHistory(messages, budget) {
+  messages = mergeSystem(messages);
+  let total = messages.reduce((a, m) => a + estTokens(m), 0);
+  if (total <= budget) return messages;
+  const head = messages.filter(m => m.role === 'system');
+  const rest = messages.filter(m => m.role !== 'system');
+  let dropped = 0;
+  // quita desde el principio; luego sigue hasta que empiece en un mensaje 'user' (no deja tool/assistant huérfanos)
+  while (rest.length > 1 && (total > budget || rest[0].role !== 'user')) {
+    total -= estTokens(rest.shift());
+    dropped++;
+  }
+  log(`historial recortado: ${dropped} mensajes viejos descartados (~${total} tokens restantes, tope ${budget})`);
+  return [...head, { role: 'user', content: `[claude-switch: se omitieron ${dropped} mensajes anteriores para caber en el contexto de Qwen]` }, ...rest];
+}
+
 function anthropicToOpenAI(body) {
   const messages = [];
   if (body.system) {
@@ -167,7 +256,7 @@ function anthropicToOpenAI(body) {
 
   const out = {
     model: pickModel(body.model),
-    messages,
+    messages: trimHistory(messages, cfg.maxPromptTokens ?? 85000),
     stream: !!body.stream,
   };
   if (body.max_tokens != null) out.max_tokens = body.max_tokens;
@@ -177,7 +266,7 @@ function anthropicToOpenAI(body) {
   if (Array.isArray(body.tools) && body.tools.length) {
     out.tools = body.tools.map(t => ({
       type: 'function',
-      function: { name: t.name, description: t.description || '', parameters: t.input_schema ?? { type: 'object', properties: {} } },
+      function: { name: t.name, description: t.description || '', parameters: simplifySchema(t.input_schema ?? { type: 'object', properties: {} }, t.input_schema ?? {}) },
     }));
     if (body.tool_choice) {
       const tc = body.tool_choice;
@@ -323,6 +412,7 @@ async function streamOpenAIToAnthropic(upstream, res, requestedModel) {
 
 async function handleQwen(req, res) {
   const raw = await readBody(req);
+  if (cfg.debugRequests) { try { writeFileSync(join(__dirname, 'debug-last-request.json'), raw); } catch {} } // contiene tu conversación: solo con "debugRequests": true
   let body;
   try { body = JSON.parse(raw.toString('utf8')); } catch {
     res.writeHead(400, { 'content-type': 'application/json' });
@@ -335,7 +425,7 @@ async function handleQwen(req, res) {
   try {
     upstream = await fetch(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...backendAuth() },
       body: JSON.stringify(openaiReq),
     });
   } catch (e) {
@@ -425,7 +515,7 @@ refresh(); setInterval(refresh, 4000);
 // ─── servidor ────────────────────────────────────────────────────
 async function lmstudioAlive() {
   try {
-    const r = await fetch(`${cfg.lmstudioBase}/models`, { signal: AbortSignal.timeout(1500) });
+    const r = await fetch(`${cfg.lmstudioBase}/models`, { headers: backendAuth(), signal: AbortSignal.timeout(1500) });
     return r.ok;
   } catch { return false; }
 }

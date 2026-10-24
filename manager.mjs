@@ -46,7 +46,8 @@ function saveManagerState() {
 }
 
 function isAlive(a) {
-  if (a.child && a.child.exitCode === null && !a.child.killed) return true;
+  // hijo vivo: sin exitCode Y sin signalCode (pkill externo deja exitCode===null)
+  if (a.child && a.child.exitCode === null && !a.child.killed && !a.child.signalCode) return true;
   if (a.pid) {
     try { process.kill(a.pid, 0); return true; } catch {}
   }

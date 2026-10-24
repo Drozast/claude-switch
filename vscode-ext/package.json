@@ -27,6 +27,10 @@
       {
         "command": "claudeSwitch.useQwen",
         "title": "Claude Switch: Usar Qwen (local)"
+      },
+      {
+        "command": "claudeSwitch.openPanel",
+        "title": "Claude Switch: Abrir panel de ventanas"
       }
     ],
     "keybindings": [
