@@ -87,9 +87,10 @@ function render(status) {
     return;
   }
   const isQwen = status.mode === 'qwen';
-  item.text = isQwen ? '🔵 Qwen local' : '🟠 Claude · suscripción';
+  const alt = status.qwenModel || 'otro modelo';
+  item.text = isQwen ? `🔵 ${alt}` : '🟠 Claude · suscripción';
   item.tooltip =
-    (isQwen ? 'Modelo activo: Qwen local\n' : 'Modelo activo: Claude (suscripción)\n') +
+    (isQwen ? `Modelo activo: ${alt} (backend alternativo)\n` : 'Modelo activo: Claude (suscripción)\n') +
     `Ventana ${myPort} (solo afecta a esta ventana)\n` +
     'Clic para cambiar · ⌘⌥M también cambia';
 }
@@ -101,7 +102,7 @@ async function setMode(mode) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ mode }),
     });
-    vscode.window.showInformationMessage(`claude-switch (ventana ${myPort}) → ${mode === 'qwen' ? '🔵 Qwen local' : '🟠 Claude (suscripción)'}`);
+    vscode.window.showInformationMessage(`claude-switch (ventana ${myPort}) → ${mode === 'qwen' ? '🔵 otro modelo' : '🟠 Claude (suscripción)'}`);
     render(await getStatus());
   } catch {
     vscode.window.showErrorMessage('claude-switch no responde. Arranca: ~/claude-switch/switch.sh start');
@@ -112,7 +113,7 @@ async function toggle() {
   try {
     await fetchJson(`http://127.0.0.1:${myPort}/__switch/toggle`, { method: 'POST' });
     const s = await getStatus();
-    vscode.window.showInformationMessage(`claude-switch (ventana ${myPort}) → ${s?.mode === 'qwen' ? '🔵 Qwen local' : '🟠 Claude (suscripción)'}`);
+    vscode.window.showInformationMessage(`claude-switch (ventana ${myPort}) → ${s?.mode === 'qwen' ? '🔵 ' + (s.qwenModel || 'otro modelo') : '🟠 Claude (suscripción)'}`);
     render(s);
   } catch {
     vscode.window.showErrorMessage('claude-switch no responde. Arranca: ~/claude-switch/switch.sh start');

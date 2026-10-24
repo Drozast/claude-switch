@@ -172,7 +172,7 @@ async function refresh(){
       + '<div class="win">'+w.label+'<small>puerto '+w.port+(w.alive?'':' · proxy caído (reconectando)')+'</small></div>';
     for (const m of ['claude','qwen']) {
       const b = document.createElement('button');
-      b.textContent = m==='claude' ? '🟠 Claude' : '🔵 Qwen';
+      b.textContent = m==='claude' ? '🟠 Claude' : '🔵 Otro modelo';
       b.className = (w.mode===m && w.alive) ? ('active '+m) : '';
       b.onclick = async () => {
         await fetch('http://127.0.0.1:'+w.port+'/__switch/mode',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:m})});

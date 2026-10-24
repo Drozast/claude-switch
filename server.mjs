@@ -514,7 +514,7 @@ const UI = `<!doctype html>
   <div class="status"><span class="dot claude" id="dot"></span><span id="mode">…</span></div>
   <div class="btns">
     <button id="bClaude" onclick="setMode('claude')">🟠 Claude · suscripción</button>
-    <button id="bQwen" onclick="setMode('qwen')">🔵 Qwen · local</button>
+    <button id="bQwen" onclick="setMode('qwen')">🔵 Otro modelo</button>
   </div>
   <div class="lm" id="lm">comprobando LM Studio…</div>
   <div class="hint">El cambio es inmediato: las sesiones de Claude Code abiertas en VSCode pasan a usar el otro modelo con el próximo mensaje. No hay que cerrar nada.</div>
@@ -523,13 +523,13 @@ const UI = `<!doctype html>
 async function refresh() {
   try {
     const s = await (await fetch('/__switch/status')).json();
-    document.getElementById('mode').textContent = s.mode === 'qwen' ? 'Qwen local' : 'Claude (suscripción)';
+    document.getElementById('mode').textContent = s.mode === 'qwen' ? s.qwenModel : 'Claude (suscripción)';
     document.getElementById('dot').className = 'dot ' + s.mode;
     document.getElementById('bClaude').className = s.mode === 'claude' ? 'active claude' : '';
     document.getElementById('bQwen').className = s.mode === 'qwen' ? 'active qwen' : '';
     const lm = document.getElementById('lm');
-    if (s.lmstudio) { lm.innerHTML = '<span class="ok">●</span> LM Studio responde en ' + s.lmstudioBase; }
-    else { lm.innerHTML = '<span class="bad">●</span> LM Studio NO responde en ' + s.lmstudioBase + ' — arrácalo antes de usar Qwen'; }
+    if (s.lmstudio) { lm.innerHTML = '<span class="ok">●</span> Backend responde en ' + s.lmstudioBase; }
+    else { lm.innerHTML = '<span class="bad">●</span> Backend NO responde en ' + s.lmstudioBase + ' — arráncalo antes de usar el otro modelo'; }
   } catch (e) { document.getElementById('mode').textContent = 'sin conexión al servidor'; }
 }
 async function setMode(m) { await fetch('/__switch/mode', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ mode: m }) }); refresh(); }

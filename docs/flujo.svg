@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 476" role="img" aria-label="Cada ventana de VS Code apunta a su propio proxy del manager; cada proxy está en modo Claude (pasa a api.anthropic.com con el token de la suscripción) o en modo otro modelo (traduce a un backend OpenAI-compatible local o con API key)." font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <title>claude-switch: un proxy y un modo por ventana</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1117"/>
+      <stop offset="1" stop-color="#151c26"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e8795a"/>
+      <stop offset="1" stop-color="#c96442"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6aa0ff"/>
+      <stop offset="1" stop-color="#4f7cff"/>
+    </linearGradient>
+    <marker id="aO" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#e8795a"/></marker>
+    <marker id="aB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#6aa0ff"/></marker>
+    <marker id="aG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#7d8896"/></marker>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="959" height="475" rx="20" fill="url(#bg)" stroke="#2a3441"/>
+
+  <!-- columnas: títulos -->
+  <g fill="#7d8896" font-size="11" letter-spacing="1.4" text-anchor="middle">
+    <text x="119" y="40">TUS SESIONES</text>
+    <text x="475" y="40">MANAGER :8790</text>
+    <text x="833" y="40">DESTINO</text>
+  </g>
+
+  <!-- clientes -->
+  <g>
+    <rect x="24" y="106" width="190" height="88" rx="14" fill="#161d27" stroke="#2c3643"/>
+    <text x="40" y="143" fill="#eef2f7" font-size="14" font-weight="600">VS Code · ventana A</text>
+    <text x="40" y="164" fill="#8b97a6" font-size="11.5">proyecto 1</text>
+
+    <rect x="24" y="221" width="190" height="88" rx="14" fill="#161d27" stroke="#2c3643"/>
+    <text x="40" y="258" fill="#eef2f7" font-size="14" font-weight="600">VS Code · ventana B</text>
+    <text x="40" y="279" fill="#8b97a6" font-size="11.5">proyecto 2</text>
+
+    <rect x="24" y="336" width="190" height="88" rx="14" fill="#161d27" stroke="#2c3643"/>
+    <text x="40" y="373" fill="#eef2f7" font-size="14" font-weight="600">Terminal</text>
+    <text x="40" y="394" fill="#8b97a6" font-size="11.5">claude CLI, fuera de VS Code</text>
+  </g>
+
+  <!-- cliente -> proxy -->
+  <g stroke="#7d8896" stroke-width="1.6" fill="none">
+    <line x1="216" y1="150" x2="306" y2="150" marker-end="url(#aG)"/>
+    <line x1="216" y1="265" x2="306" y2="265" marker-end="url(#aG)"/>
+    <line x1="216" y1="380" x2="306" y2="380" marker-end="url(#aG)"/>
+  </g>
+  <g fill="#9aa6b5" font-size="10.5" text-anchor="middle">
+    <text x="256" y="141">BASE_URL</text>
+    <text x="256" y="256">BASE_URL</text>
+    <text x="256" y="371">BASE_URL</text>
+  </g>
+
+  <!-- manager -->
+  <rect x="290" y="56" width="370" height="384" rx="20" fill="#121922" stroke="#33404f"/>
+  <text x="310" y="82" fill="#eef2f7" font-size="14" font-weight="600">un proxy por ventana</text>
+  <text x="310" y="99" fill="#8b97a6" font-size="11">cada uno con su propio modo, cambiable en caliente</text>
+
+  <!-- proxy A: modo Claude -->
+  <rect x="310" y="106" width="330" height="88" rx="12" fill="#1a232e" stroke="#2f3b49"/>
+  <text x="326" y="143" fill="#eef2f7" font-size="16" font-weight="600">:8792</text>
+  <text x="326" y="164" fill="#8b97a6" font-size="11.5">ventana A</text>
+  <rect x="466" y="137" width="64" height="26" rx="13" fill="url(#orange)"/>
+  <text x="498" y="154" fill="#ffffff" font-size="12" font-weight="600" text-anchor="middle">Claude</text>
+  <rect x="536" y="137" width="94" height="26" rx="13" fill="none" stroke="#3b4757"/>
+  <text x="583" y="154" fill="#6c7788" font-size="12" text-anchor="middle">Otro modelo</text>
+
+  <!-- proxy B: modo Qwen -->
+  <rect x="310" y="221" width="330" height="88" rx="12" fill="#1a232e" stroke="#2f3b49"/>
+  <text x="326" y="258" fill="#eef2f7" font-size="16" font-weight="600">:8793</text>
+  <text x="326" y="279" fill="#8b97a6" font-size="11.5">ventana B</text>
+  <rect x="466" y="252" width="64" height="26" rx="13" fill="none" stroke="#3b4757"/>
+  <text x="498" y="269" fill="#6c7788" font-size="12" text-anchor="middle">Claude</text>
+  <rect x="536" y="252" width="94" height="26" rx="13" fill="url(#blue)"/>
+  <text x="583" y="269" fill="#ffffff" font-size="12" font-weight="600" text-anchor="middle">Otro modelo</text>
+
+  <!-- proxy terminal: global, modo Qwen -->
+  <rect x="310" y="336" width="330" height="88" rx="12" fill="#1a232e" stroke="#2f3b49"/>
+  <text x="326" y="373" fill="#eef2f7" font-size="16" font-weight="600">:8791</text>
+  <text x="326" y="394" fill="#8b97a6" font-size="11.5">terminal / global</text>
+  <rect x="466" y="367" width="64" height="26" rx="13" fill="none" stroke="#3b4757"/>
+  <text x="498" y="384" fill="#6c7788" font-size="12" text-anchor="middle">Claude</text>
+  <rect x="536" y="367" width="94" height="26" rx="13" fill="url(#blue)"/>
+  <text x="583" y="384" fill="#ffffff" font-size="12" font-weight="600" text-anchor="middle">Otro modelo</text>
+
+  <!-- proxy -> destino -->
+  <line x1="642" y1="150" x2="730" y2="150" stroke="#e8795a" stroke-width="2" marker-end="url(#aO)"/>
+  <text x="686" y="141" fill="#f0a58f" font-size="10.5" text-anchor="middle">tal cual</text>
+  <line x1="642" y1="265" x2="730" y2="265" stroke="#6aa0ff" stroke-width="2" marker-end="url(#aB)"/>
+  <text x="686" y="256" fill="#9cc0ff" font-size="10.5" text-anchor="middle">→ OpenAI</text>
+  <line x1="642" y1="380" x2="730" y2="380" stroke="#6aa0ff" stroke-width="2" marker-end="url(#aB)"/>
+  <text x="686" y="371" fill="#9cc0ff" font-size="10.5" text-anchor="middle">→ OpenAI</text>
+
+  <!-- destinos -->
+  <rect x="732" y="106" width="206" height="88" rx="14" fill="#1d1613" stroke="#c96442"/>
+  <text x="748" y="140" fill="#ffd9cc" font-size="14" font-weight="600">api.anthropic.com</text>
+  <text x="748" y="160" fill="#c9a597" font-size="11.5">tu suscripción, token</text>
+  <text x="748" y="176" fill="#c9a597" font-size="11.5">OAuth sin tocar</text>
+
+  <rect x="732" y="221" width="206" height="203" rx="14" fill="#121a26" stroke="#4f7cff"/>
+  <text x="748" y="285" fill="#d6e4ff" font-size="14" font-weight="600">Backend local o propio</text>
+  <text x="748" y="306" fill="#9db4d8" font-size="11.5">LM Studio · llama.cpp · vLLM</text>
+  <text x="748" y="324" fill="#9db4d8" font-size="11.5">en tu Mac o en tu red</text>
+  <text x="748" y="348" fill="#9db4d8" font-size="11.5">o un proveedor con API key</text>
+  <text x="748" y="366" fill="#9db4d8" font-size="11.5">(OpenRouter, DeepSeek…)</text>
+
+  <text x="480" y="462" fill="#7d8896" font-size="11.5" text-anchor="middle">el clic en la barra de estado cambia solo el modo de esa ventana; la siguiente petición ya sale por el otro camino</text>
+</svg>

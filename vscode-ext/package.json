@@ -1,7 +1,7 @@
 {
   "name": "claude-model-switch",
   "displayName": "Claude Model Switch",
-  "description": "Cambia entre Claude (suscripción) y Qwen local con un clic en la barra de estado",
+  "description": "Cambia entre Claude (suscripción) y cualquier otro modelo (local o por API) con un clic en la barra de estado",
   "version": "0.0.1",
   "publisher": "drozast",
   "engines": {
@@ -26,7 +26,7 @@
       },
       {
         "command": "claudeSwitch.useQwen",
-        "title": "Claude Switch: Usar Qwen (local)"
+        "title": "Claude Switch: Usar otro modelo (local o API)"
       },
       {
         "command": "claudeSwitch.openPanel",

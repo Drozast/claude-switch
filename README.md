@@ -1,23 +1,16 @@
 # claude-switch
 
-Cambia entre **Claude (suscripción)** y **Qwen local (LM Studio)** en Claude Code con un clic, sin cerrar sesiones ni ventanas de VSCode.
+Cambia entre **Claude (suscripción)** y **cualquier otro modelo** —uno local, uno en otra máquina de tu red o un proveedor con API key— en Claude Code con un clic, sin cerrar sesiones ni ventanas de VS Code.
 
-```
-┌──────────────┐  ANTHROPIC_BASE_URL   ┌─────────────────────────────────┐
-│ Ventana VSCode A │ ───────────────► │ manager :8790                   │
-│ (extensión inyecta su puerto)        │   ├ proxy :8791  (terminal/global)
-├──────────────┤                     │   ├ proxy :8792  (ventana A) ◄──┤ cada uno con su modo
-│ Ventana VSCode B │ ───────────────► │   └ proxy :8793  (ventana B)    │
-└──────────────┘                     └─────────────────────────────────┘
-        cada proxy:  modo claude ──► api.anthropic.com (suscripción, token OAuth intacto)
-                      modo qwen   ──► backend OpenAI local (LM Studio, llama.cpp, vLLM…)
-```
+<p align="center"><img src="docs/flujo.svg" alt="Cada ventana de VS Code apunta a su propio proxy; cada proxy va a api.anthropic.com (modo Claude) o a un backend OpenAI-compatible (modo otro modelo)" width="100%"></p>
+
+📖 **[Tutorial de instalación paso a paso](docs/INSTALACION.md)** · 🧠 [Arquitectura](docs/ARQUITECTURA.md)
 
 El truco: Claude Code apunta **siempre** a un proxy local. El proxy decide por dónde manda cada petición, y ese cambio es en caliente — la próxima petición de la sesión abierta usa el otro modelo. No hay que reiniciar nada.
 
 ### Modo por-ventana
 
-Cada **ventana** de VSCode tiene su **propio proxy y su propio modo**: la extensión escribe `ANTHROPIC_BASE_URL` apuntando a su puerto en `.claude/settings.local.json` del proyecto (Claude Code lo lee por proyecto y pisa el valor global). Así puedes tener una ventana en Claude y otra en Qwen al mismo tiempo, y el clic en la barra de estado solo afecta a la ventana donde lo haces.
+Cada **ventana** de VSCode tiene su **propio proxy y su propio modo**: la extensión escribe `ANTHROPIC_BASE_URL` apuntando a su puerto en `.claude/settings.local.json` del proyecto (Claude Code lo lee por proyecto y pisa el valor global). Así puedes tener una ventana en Claude y otra con otro modelo al mismo tiempo, y el clic en la barra de estado solo afecta a la ventana donde lo haces.
 
 - El CLI fuera de VSCode (terminal) usa el proxy **default** (`Terminal / global` en la UI).
 - La página web del manager (puerto 8790) lista todas las ventanas activas con su modo y botones para cambiarlo.
@@ -27,10 +20,10 @@ Cada **ventana** de VSCode tiene su **propio proxy y su propio modo**: la extens
 ## Características
 
 - 🟠 **Modo Claude**: passthrough transparente a `api.anthropic.com`. Tu token OAuth de la suscripción (Pro/Max) pasa intacto; el proxy no lo guarda ni lo ve.
-- 🔵 **Modo Qwen**: convierte la Anthropic Messages API a formato OpenAI y manda a tu backend local (LM Studio, llama.cpp en la red, vLLM…). Soporta streaming SSE, tool calls (`tool_use`/`tool_result`), system prompts, imágenes base64 y `tool_choice`.
-- 🖱️ **Un clic**: extensión de VSCode con indicador en la barra de estado (`🟠 Claude · suscripción` / `🔵 Qwen local`), atajo `⌘⌥M`, página web con dos botones grandes, o alias de terminal.
+- 🔵 **Modo alternativo** (`qwen` en los comandos, por razones históricas; sirve para cualquier modelo): convierte la Anthropic Messages API a formato OpenAI y manda a tu backend (LM Studio, llama.cpp en la red, vLLM… o un proveedor con API key). Soporta streaming SSE, tool calls (`tool_use`/`tool_result`), system prompts, imágenes base64 y `tool_choice`.
+- 🖱️ **Un clic**: extensión de VSCode con indicador en la barra de estado (`🟠 Claude · suscripción` / `🔵 <nombre de tu modelo>`), atajo `⌘⌥M`, página web con dos botones grandes, o alias de terminal.
 - 🔄 **Cambio en caliente**: sin cerrar sesiones, terminales ni ventanas. El modo persiste entre reinicios.
-- 🩺 **Salud**: la UI y la barra de estado indican si LM Studio responde antes de que lo necesites.
+- 🩺 **Salud**: la UI y la barra de estado indican si tu backend responde antes de que lo necesites.
 - 📦 **Cero dependencias**: Node ≥ 18, un solo archivo de servidor.
 
 ## Escenarios de uso
@@ -80,7 +73,7 @@ Razonamiento (modelos thinking): según un test agéntico propio de 5 tareas peq
 
 - [Node.js](https://nodejs.org) ≥ 18 (el servidor)
 - Claude Code (CLI y/o extensión de VSCode) con **suscripción** activa
-- Para el modo Qwen: **cualquier backend OpenAI-compatible** corriendo con el modelo cargado — [LM Studio](https://lmstudio.ai) local, `llama-server` (llama.cpp) en otra máquina de tu LAN/Tailscale, vLLM, etc. El default apunta a LM Studio en `http://127.0.0.1:1234`
+- Para el modo alternativo: **cualquier backend OpenAI-compatible** corriendo con el modelo cargado — [LM Studio](https://lmstudio.ai) local, `llama-server` (llama.cpp) en otra máquina de tu LAN/Tailscale, vLLM, etc. El default apunta a LM Studio en `http://127.0.0.1:1234`
 
 ## Instalación
 
@@ -156,7 +149,7 @@ Te da:
 - Indicador en la barra de estado (abajo a la izquierda): clic para alternar
 - Atajo `⌘⌥M` (toggle)
 - Icono `$(window)` junto al indicador: abre el panel del manager (todas las ventanas) dentro de VSCode, sin navegador
-- Comandos en la paleta: *Claude Switch: Cambiar modelo / Usar Claude / Usar Qwen / Abrir panel de ventanas*
+- Comandos en la paleta: *Claude Switch: Cambiar modelo / Usar Claude / Usar otro modelo / Abrir panel de ventanas*
 
 Tras instalarla, recarga la ventana y abre una sesión nueva de Claude Code (las ya abiertas conservan su puerto anterior).
 
@@ -164,12 +157,12 @@ Tras instalarla, recarga la ventana y abre una sesión nueva de Claude Code (las
 
 | Método | Acción |
 |---|---|
-| **Barra de estado VSCode** | Clic en `🟠 Claude · suscripción` ↔ `🔵 Qwen local` — **solo afecta a esa ventana** |
+| **Barra de estado VSCode** | Clic en `🟠 Claude · suscripción` ↔ `🔵 <tu modelo>` — **solo afecta a esa ventana** |
 | **Atajo** | `⌘⌥M` (en la ventana activa) |
 | **Web** | http://127.0.0.1:8790 — todas las ventanas + proxy de terminal, con botones por fila |
 | **Terminal** | `./switch.sh status` (lista todo) · `./switch.sh qwen [puerto]` · `./switch.sh claude [puerto]` · `./switch.sh toggle [puerto]` — sin puerto, actúa sobre el proxy de terminal |
 
-Para usar Qwen: arranca LM Studio con el modelo cargado, haz clic en 🔵 y listo. Para volver: clic en 🟠. Las conversaciones abiertas continúan exactamente donde estaban; solo la **próxima** petición cambia de modelo.
+Para usar el otro modelo: arranca tu backend con el modelo cargado, haz clic en 🔵 y listo. Para volver: clic en 🟠. Las conversaciones abiertas continúan exactamente donde estaban; solo la **próxima** petición cambia de modelo.
 
 ## Operación
 
@@ -190,12 +183,12 @@ Archivos: `config.json` (configuración) · `states/` (modo por proxy, generado)
 
 ## Notas
 
-- **Límites de sesión**: en modo Claude sigues consumiendo tu suscripción (incluidos los límites de 5h/semana). El modo Qwen es local e ilimitado (según tu máquina).
+- **Límites de sesión**: en modo Claude sigues consumiendo tu suscripción (incluidos los límites de 5h/semana). El modo alternativo corre en tu backend: si es local no tiene límites de uso (depende de tu máquina); si es un proveedor, se rige por su plan.
 - **El proxy debe estar corriendo**: si no, Claude Code no conecta. Con el autostart no debería pasar; si pasa, `./switch.sh start`.
-- **Backend local**: el modo Qwen mapea *todos* los nombres de modelo de Claude a `qwenModel`/`haikuModel`. El backend puede ser LM Studio, llama.cpp (`llama-server`) en otra máquina de tu red (LAN/Tailscale), vLLM… cualquier API OpenAI-compatible que soporte streaming y function calling.
+- **Backend local**: el modo alternativo mapea *todos* los nombres de modelo de Claude a `qwenModel`/`haikuModel`. El backend puede ser LM Studio, llama.cpp (`llama-server`) en otra máquina de tu red (LAN/Tailscale), vLLM… cualquier API OpenAI-compatible que soporte streaming y function calling.
 - **Modelos thinking** (llama.cpp): limita el razonamiento con `"extraOpenAI": {"thinking_budget_tokens": 2000}` o apágalo con `{"chat_template_kwargs": {"enable_thinking": false}}`; sin tope, las respuestas pueden consumir los tokens en reasoning y llegar vacías.
 - **Privacidad**: el proxy no guarda tus peticiones (solo con `debugRequests: true`) ni tu token OAuth; `config.json`, `states/` y `manager-state.json` son locales y no se versionan.
 
 ## Licencia
 
-[MIT](LICENSE) — © Dani Rozas Torres
+[MIT](LICENSE)
